@@ -1,29 +1,24 @@
 # Modular Data Profiler 2025 🚀
 
-*A Hackathon Project - Celebrating the Unappreciated Work of Machine Learning*
+*A Hackathon Project — Honoring the Unsung Heroes of Machine Learning*
 
 ## 🎯 Overview
 
-This project represents the often overlooked but critical foundation of machine learning: data profiling and preprocessing. While flashy models get the spotlight, the real heroes are the data engineers and scientists who ensure clean, well-understood data flows through ML pipelines.
+This project shines a light on the essential, yet often underappreciated, work of data profiling and preprocessing in machine learning. While sophisticated models often steal the show, it’s the data engineers and scientists who ensure that clean, well-understood data powers every ML pipeline.
 
 ## 💡 Vision
 
-Our vision is to develop a dataframe library, inspired by NVIDIA's RAPIDS, to perform computations on the GPU.
+Our goal is to build a dataframe library—drawing inspiration from NVIDIA RAPIDS—that leverages GPU acceleration for high-performance computations.
 
 ## 📊 Numerical Analysis
 
-Currently, we have implemented a GPU-optimized `MAX` function. Here is a sample of its execution:
+We have implemented GPU-optimized functions for `MAX`, `MIN`, and `MEAN` calculations.
 
-```text
-Input data shape: (100,)
-Input data sample: [0 1 2 3 4 5 6 7 8 9]
+**Input Data Shape:** `(100,)`  
+**Sample Input:** `[44. 41. 70. 60.  2. 57. 76. 77. 56. 35.]`
 
-Result:
-Max value: 99
-
-Expected:
-Max value: 99
-
-Verification successful!
-```
-
+| Operation | Result | Expected | Status                  |
+|-----------|--------|----------|-------------------------|
+| Max       | 99.0   | 99.0     | ✅ Verification passed! |
+| Min       | 0.0    | 0.0      | ✅ Verification passed! |
+| Mean      | 49.5   | 49.5     | ✅ Verification passed! |
