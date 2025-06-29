@@ -1,88 +1,75 @@
-# ===----------------------------------------------------------------------=== #
-# Copyright (c) 2025, Modular Inc. All rights reserved.
-#
-# Licensed under the Apache License v2.0 with LLVM Exceptions:
-# https://llvm.org/LICENSE.txt
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ===----------------------------------------------------------------------=== #
-
 from pathlib import Path
-
 import numpy as np
 from max.driver import CPU, Accelerator, Tensor, accelerator_count
 from max.dtype import DType
 from max.engine import InferenceSession
 from max.graph import DeviceRef, Graph, TensorType, ops
 
-if __name__ == "__main__":
-    mojo_kernels = Path(__file__).parent / "kernels"
+# Simple parameters for a 1D vector
+vector_size = 10
+dtype = DType.int32
 
-    rows = 5
-    columns = 10
-    dtype = DType.float32
+# Use GPU if available, fallback to CPU
+try:
+    device = Accelerator() if accelerator_count() > 0 else CPU()
+    print(f"Using device: {type(device).__name__}")
+except:
+    device = CPU()
+    print("Using CPU fallback")
 
-    # Place the graph on a GPU, if available. Fall back to CPU if not.
-    device = CPU() if accelerator_count() == 0 else Accelerator()
-
-    # Configure our simple one-operation graph.
-    graph = Graph(
-        "addition",
-        # The custom Mojo operation is referenced by its string name, and we
-        # need to provide inputs as a list as well as expected output types.
-        # Since the custom operation is parametric, we need to provide the
-        # parameters as a dictionary.
-        forward=lambda x: ops.custom(
-            name="add_constant",
-            device=DeviceRef.from_device(device),
-            values=[x],
-            out_types=[
-                TensorType(
-                    dtype=x.dtype,
-                    shape=x.tensor.shape,
-                    device=DeviceRef.from_device(device),
-                )
-            ],
-            parameters={"value": 5},
-        )[0].tensor,
-        input_types=[
-            TensorType(
-                dtype,
-                shape=[rows, columns],
-                device=DeviceRef.from_device(device),
-            ),
+# Create the graph
+graph = Graph(
+    "max_vector_1d",
+    forward=lambda x: ops.custom(
+        # Use the new kernel name for 1D vectors
+        name="max_1d_vector",
+        device=DeviceRef.from_device(device),
+        values=[x],
+        # The output is now a single scalar value, represented as a tensor of shape [1]
+        out_types=[
+            TensorType(dtype=dtype, shape=[1], device=DeviceRef.from_device(device)),
         ],
-        custom_extensions=[mojo_kernels],
-    )
+        parameters={},
+    ),
+    # The input is now a 1D tensor
+    input_types=[
+        TensorType(dtype, shape=[vector_size], device=DeviceRef.from_device(device))
+    ],
+    custom_extensions=[Path(__file__).parent / "kernels"],
+)
 
-    # Set up an inference session for running the graph.
-    session = InferenceSession(
-        devices=[device],
-    )
+# Setup session and load model
+session = InferenceSession(devices=[device])
+model = session.load(graph)
 
-    # Compile the graph.
-    model = session.load(graph)
+# Create 1D test data
+x_values = np.arange(vector_size, dtype=np.int32) # e.g., [0., 1., 2., ..., 1023.]
+print("Input data shape:", x_values.shape)
+print("Input data sample:", x_values[:10])
 
-    # Fill an input matrix with random values.
-    x_values = np.random.uniform(size=(rows, columns)).astype(np.float32)
 
-    # Create a driver tensor from this, and move it to the accelerator.
-    x = Tensor.from_numpy(x_values).to(device)
+# Create tensor and move to device
+x = Tensor.from_numpy(x_values).to(device)
 
-    # Perform the calculation on the target device.
-    result = model.execute(x)[0]
+try:
+    # Execute the model
+    results = model.execute(x)
+    max_vals_tensor = results[0]
+    
+    # Move result back to CPU safely
+    max_value = max_vals_tensor.to(CPU()).to_numpy()[0] # Extract the scalar from the array
+    
+    print("\nResult:")
+    print("Max value:", max_value)
+    
+    # Verify with numpy
+    expected_max = np.max(x_values)
+    print("\nExpected:")
+    print("Max value:", expected_max)
 
-    # Copy values back to the CPU to be read.
-    assert isinstance(result, Tensor)
-    result = result.to(CPU())
-
-    print("Graph result:")
-    print(result.to_numpy())
-    print()
-
-    print("Expected result:")
-    print(x_values + 5)
+    assert np.isclose(max_value, expected_max), "Verification failed!"
+    print("\nVerification successful!")
+    
+except Exception as e:
+    print(f"Error during execution: {e}")
+    print("Check that your Mojo kernel is properly compiled in the kernels/ directory")
