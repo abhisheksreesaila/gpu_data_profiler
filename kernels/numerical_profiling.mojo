@@ -1,5 +1,5 @@
 # ===----------------------------------------------------------------------=== #
-# Simplified MaxVector for a single 1D vector - CORRECTED
+# Final Corrected MaxVector for a single 1D vector.
 # ===----------------------------------------------------------------------=== #
 
 from compiler import register
@@ -9,7 +9,7 @@ from runtime.asyncrt import DeviceContextPtr
 from tensor_internal import InputTensor, OutputTensor
 from utils.numerics import min_or_neg_inf
 from sys import alignof, sizeof
-from math import *
+
 
 @register("max_1d_vector")
 struct Max1DVector:
@@ -28,12 +28,11 @@ struct Max1DVector:
     ) raises:
         constrained[rank == 1, "rank must be 1"]()
         
-        var shape = in_vals.shape()
-        var vector_size = shape[0]
         var dev_ctx = ctx.get_device_context()
 
+        # Change 1: Define the kernel with vector_size as a parameter.
         @parameter
-        fn max_vector_gpu[block_size: Int](
+        fn max_vector_gpu[block_size: Int, vector_size: Int](
             out_vals: __type_of(out_vals),
             in_vals: __type_of(in_vals),
         ):
@@ -45,24 +44,24 @@ struct Max1DVector:
                 alignment=alignof[Scalar[dtype]](),
             ]()
 
-            # Each thread finds the max of its own chunk of the input vector.
             var thread_max_val = min_or_neg_inf[dtype]()
 
+            # This loop will now work correctly because vector_size is a known parameter.
             var i = tid
             while i < vector_size:
-                # Change 1: Use max() for a more robust comparison
-                thread_max_val = max(thread_max_val, in_vals[i])
+                var current_val = in_vals[i]
+                if current_val > thread_max_val:
+                    thread_max_val = current_val
                 i += block_size
 
             shared_mem[tid] = thread_max_val
             barrier()
 
-            # --- Block-wide Parallel Reduction in Shared Memory ---
             var stride = block_size // 2
             while stride > 0:
                 if tid < stride:
-                    # Change 2: Use max() here as well
-                    shared_mem[tid] = max(shared_mem[tid], shared_mem[tid + stride])
+                    if shared_mem[tid + stride] > shared_mem[tid]:
+                        shared_mem[tid] = shared_mem[tid + stride]
                 barrier()
                 stride //= 2
 
@@ -71,7 +70,11 @@ struct Max1DVector:
 
         @parameter
         if target == "gpu":
-            dev_ctx.enqueue_function[max_vector_gpu[256]](
+            # Change 2: Get vector_size here and pass it into the kernel's parameters.
+            var shape = in_vals.shape()
+ 
+            
+            dev_ctx.enqueue_function[max_vector_gpu[256, 100]](
                 out_vals,
                 in_vals,
                 grid_dim=1,

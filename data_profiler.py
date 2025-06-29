@@ -6,7 +6,7 @@ from max.engine import InferenceSession
 from max.graph import DeviceRef, Graph, TensorType, ops
 
 # Simple parameters for a 1D vector
-vector_size = 10
+vector_size = 100
 dtype = DType.int32
 
 # Use GPU if available, fallback to CPU
@@ -73,3 +73,5 @@ try:
 except Exception as e:
     print(f"Error during execution: {e}")
     print("Check that your Mojo kernel is properly compiled in the kernels/ directory")
+
+
